@@ -1,13 +1,28 @@
-# golang-cli-template
+# ggth
+[![Go Report Card](https://goreportcard.com/badge/github.com/Jmainguy/ggth)](https://goreportcard.com/badge/github.com/Jmainguy/ggth)
+[![Release](https://img.shields.io/github/release/Jmainguy/ggth.svg?style=flat-square)](https://github.com/Jmainguy/ggth/releases/latest)
+[![Coverage Status](https://coveralls.io/repos/github/Jmainguy/ggth/badge.svg?branch=main)](https://coveralls.io/github/Jmainguy/ggth?branch=main)
 
-This is a template for creating  golang cli application. It includes .github/ actions and .goreleaser.yml for automation.
+Golang Github Template Helper
 
-Edit .goreleaser.yml and replace the following variables in .goreleaser.yml with the appropriate values
-
+## Usage
+```/bin/bash
+ggth
 ```
---BINARY--
---REPOLINK--
---DESCRIPTION--
+
+## PreBuilt Binaries
+Grab Binaries from [The Releases Page](https://github.com/Jmainguy/ggth/releases)
+
+## Install
+
+### Homebrew
+
+```/bin/bash
+brew install Jmainguy/tap/ggth
 ```
 
-Add a secret to the new repo called GORELEASER_TOKEN with permissions to homebrew-tap repo.
+## Build
+```/bin/bash
+export GO111MODULE=on
+go build
+```
