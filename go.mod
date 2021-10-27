@@ -3,6 +3,7 @@ module github.com/jmainguy/ggth
 go 1.17
 
 require (
+	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github/v39 v39.2.0
 	golang.org/x/oauth2 v0.0.0-20211005180243-6b3c2da341f1
 )
@@ -14,7 +15,6 @@ require (
 	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/go-git/gcfg v1.5.0 // indirect
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
-	github.com/go-git/go-git/v5 v5.4.2 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
