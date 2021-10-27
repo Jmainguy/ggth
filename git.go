@@ -10,10 +10,11 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v39/github"
 )
 
-func pushBranch(ctx context.Context, newBranchName string, currentRepo *git.Repository) {
+func pushBranch(ctx context.Context, currentRepo *git.Repository, newBranchName, githubUsername, githubPassword string) {
 	// Create Worktree
 	wt, err := currentRepo.Worktree()
 	if err != nil {
@@ -49,6 +50,10 @@ func pushBranch(ctx context.Context, newBranchName string, currentRepo *git.Repo
 		// git push origin
 		err = currentRepo.PushContext(ctx, &git.PushOptions{
 			RemoteName: "origin",
+			Auth: &http.BasicAuth{
+				Username: githubUsername,
+				Password: githubPassword,
+			},
 		})
 		if err != nil {
 			panic(err)
@@ -78,7 +83,7 @@ func getNewBranchName(branches []*github.Branch) string {
 	return newBranchName
 }
 
-func cloneRepo(repoDir string, templateRepo *github.Repository) {
+func cloneRepo(templateRepo *github.Repository, repoDir, githubUsername, githubPassword string) {
 	if templateRepo != nil {
 		if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
 			// Delete it, and clone it fresh
@@ -90,6 +95,10 @@ func cloneRepo(repoDir string, templateRepo *github.Repository) {
 		_, err := git.PlainClone(repoDir, false, &git.CloneOptions{
 			URL:      *templateRepo.CloneURL,
 			Progress: nil,
+			Auth: &http.BasicAuth{
+				Username: githubUsername,
+				Password: githubPassword,
+			},
 		})
 		if err != nil {
 			panic(err)
