@@ -1,53 +1,54 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/go-github/v39/github"
 	"golang.org/x/oauth2"
 )
 
-func hasGitConfig() bool {
-	_, err := os.Stat(".git/config")
-	return !os.IsNotExist(err)
-}
-
-func getRepoURLFromGitConfig() string {
-	gitConfigExists := hasGitConfig()
-	if !gitConfigExists {
-		fmt.Println(".git/config doesn't exist")
-		os.Exit(1)
-	}
-	file, err := os.Open(".git/config")
+func getRepoNameFromGitConfig(currentRepo *git.Repository) string {
+	currentRepoConfig, err := currentRepo.Config()
+	var originURL string
 	if err != nil {
 		panic(err)
 	}
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-	var line string
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "url = ") {
-			urlLine := strings.Split(scanner.Text(), "url = ")
-			// SSH style
-			line = strings.ReplaceAll(urlLine[1], "git@github.com:", "")
-			line = strings.ReplaceAll(line, ".git", "")
-			// HTTPS style
-			line = strings.ReplaceAll(line, "https://github.com/", "")
+	for _, remote := range currentRepoConfig.Remotes {
+		if remote.Name == "origin" {
+			for _, URL := range remote.URLs {
+				originURL = URL
+			}
 		}
 	}
-	return line
+
+	// SSH style
+	repoName := strings.ReplaceAll(originURL, "git@github.com:", "")
+	repoName = strings.ReplaceAll(repoName, ".git", "")
+	// HTTPS style
+	repoName = strings.ReplaceAll(repoName, "https://github.com/", "")
+	return repoName
+}
+
+func getUsage() string {
+	usage, err := ioutil.ReadFile(".usage")
+	if err != nil {
+		panic(err)
+	}
+	return string(usage)
 }
 
 func templateFile(filename string, repo *github.Repository, gitName, gitEmail string) {
+	usage := getUsage()
 	read, err := ioutil.ReadFile(filename)
 	if err != nil {
 		panic(err)
@@ -60,6 +61,7 @@ func templateFile(filename string, repo *github.Repository, gitName, gitEmail st
 
 	newContents = strings.Replace(newContents, "--MAINTAINEREMAIL--", gitEmail, -1)
 	newContents = strings.Replace(newContents, "--MAINTAINERNAME--", gitName, -1)
+	newContents = strings.Replace(newContents, "--USAGE--", usage, -1)
 
 	err = ioutil.WriteFile(filename, []byte(newContents), 0664)
 	if err != nil {
@@ -68,16 +70,16 @@ func templateFile(filename string, repo *github.Repository, gitName, gitEmail st
 }
 
 // https://golang.cafe/blog/how-to-list-files-in-a-directory-in-go.html
-func getAllFiles() (files []string) {
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+func getAllFiles(dirPath string) (files []string) {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Println(err)
 			return err
 		}
 
 		if !info.IsDir() {
-			// Don't edit .git/ files
-			if !strings.HasPrefix(path, ".git/") {
+			// Don't list .git/ files
+			if !strings.Contains(path, ".git/") && !strings.Contains(path, ".template/") {
 				files = append(files, path)
 			}
 		}
@@ -90,29 +92,33 @@ func getAllFiles() (files []string) {
 }
 
 func getGitProfile() (gitName, gitEmail string) {
-	cmd := exec.Command("git", "config", "user.Name")
-	var stdoutName bytes.Buffer
-	var stdoutEmail bytes.Buffer
-	cmd.Stdout = &stdoutName
-	err := cmd.Run()
+	gitConfig, err := config.LoadConfig(config.GlobalScope)
 	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
+		panic(err)
 	}
-	gitName = stdoutName.String()
-	gitName = strings.TrimSuffix(gitName, "\n")
-
-	cmd = exec.Command("git", "config", "user.Email")
-	cmd.Stdout = &stdoutEmail
-	err = cmd.Run()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-
-	gitEmail = stdoutEmail.String()
-	gitEmail = strings.TrimSuffix(gitEmail, "\n")
+	gitName = gitConfig.User.Name
+	gitEmail = gitConfig.User.Email
 	return gitName, gitEmail
-
 }
+
+func copyFiles(src, dst string) {
+	srcFiles := getAllFiles(src)
+	for _, file := range srcFiles {
+		destFile := strings.TrimPrefix(file, src)
+		destFile = dst + "/" + destFile
+		bytesRead, err := ioutil.ReadFile(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = ioutil.WriteFile(destFile, bytesRead, 0644)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
+}
+
 func main() {
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
@@ -123,7 +129,11 @@ func main() {
 	client := github.NewClient(tc)
 
 	gitName, gitEmail := getGitProfile()
-	repoURL := getRepoURLFromGitConfig()
+	currentRepo, err := git.PlainOpen(".")
+	if err != nil {
+		panic(err)
+	}
+	repoURL := getRepoNameFromGitConfig(currentRepo)
 	ownerRepo := strings.Split(repoURL, "/")
 	owner := strings.ToLower(ownerRepo[0])
 	repoName := strings.ToLower(ownerRepo[1])
@@ -131,9 +141,94 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	repoDir := "/tmp/foo/"
+	templateRepo := repo.GetTemplateRepository()
+	if templateRepo != nil {
+		fmt.Println(*templateRepo.Name)
+		fmt.Println(*templateRepo.CloneURL)
 
-	files := getAllFiles()
+		if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
+			// Delete it, and clone it fresh
+			err = os.RemoveAll(repoDir)
+			if err != nil {
+				panic(err)
+			}
+		}
+		_, err := git.PlainClone(repoDir, false, &git.CloneOptions{
+			URL:      *templateRepo.CloneURL,
+			Progress: nil,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+	}
+	copyFiles(repoDir, ".")
+
+	files := getAllFiles(".")
 	for _, file := range files {
 		templateFile(file, repo, gitName, gitEmail)
+	}
+	// What branch we on
+	branches, _, err := client.Repositories.ListBranches(ctx, owner, repoName, &github.BranchListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	var pullRequestIncrement int
+	for _, branch := range branches {
+		if strings.HasPrefix(*branch.Name, "ggth-") {
+			incrementStr := strings.TrimPrefix(*branch.Name, "ggth-")
+			increment, err := strconv.Atoi(incrementStr)
+			if err != nil {
+				panic(err)
+			}
+
+			if increment >= pullRequestIncrement {
+				pullRequestIncrement = increment + 1
+			}
+
+		}
+	}
+	// Check worktree status
+	wt, err := currentRepo.Worktree()
+	if err != nil {
+		panic(err)
+	}
+	wtStatus, err := wt.Status()
+	if err != nil {
+		panic(err)
+	}
+
+	// If not clean, checkout, add, commit, push
+	if !wtStatus.IsClean() {
+		newBranchName := fmt.Sprintf("ggth-%d", pullRequestIncrement)
+		err = wt.Checkout(&git.CheckoutOptions{
+			Create: true,
+			Keep:   true,
+			Force:  false,
+			Branch: plumbing.NewBranchReferenceName(newBranchName),
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = wt.Add(".")
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = wt.Commit("GGTH template updating", &git.CommitOptions{})
+		if err != nil {
+			panic(err)
+		}
+
+		err = currentRepo.PushContext(ctx, &git.PushOptions{
+			RemoteName: "origin",
+		})
+		if err != nil {
+			panic(err)
+		}
+
 	}
 }
