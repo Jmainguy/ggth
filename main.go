@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"flag"
+	"time"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/google/go-github/v39/github"
@@ -15,7 +16,10 @@ import (
 func main() {
 	githubOwnerPtr := flag.String("githubOwner", "", "Github owner")
 	githubRepoPtr := flag.String("githubRepo", "", "Github repo to source, owned by githubOwner")
-	//create
+	templateOwnerPtr := flag.String("templateOwner", "", "Owner of template, if you wish to create a new repo")
+	templateNamePtr := flag.String("templateName", "", "Name of template, if you wish to create a new repo")
+	descriptionPtr := flag.String("description", "", "Description of repo you wish to create")
+
 	flag.Parse()
 
 	githubUsername := os.Getenv("ghUsername")
@@ -37,12 +41,32 @@ func main() {
 	if *githubOwnerPtr != "" {
 		if *githubRepoPtr != "" {
 			workDir = "/tmp/source/"
-			// Clone template repo to a temporary directory
+			// Check if Repo exists
+
 			remoteSourceRepo, _, err := client.Repositories.Get(ctx, githubOwner, githubRepo)
 			if err != nil {
-				panic(err)
+				// Create Repo if asked to
+				if *templateOwnerPtr != "" {
+					if *templateNamePtr != "" {
+						templateRepoRequest := &github.TemplateRepoRequest{
+							Name:        githubRepoPtr,
+							Owner:       githubOwnerPtr,
+							Description: descriptionPtr,
+							Private:     github.Bool(false),
+						}
+						clonedRemoteSourceRepo, _, err := client.Repositories.CreateFromTemplate(ctx, *templateOwnerPtr, *templateNamePtr, templateRepoRequest)
+						if err != nil {
+							panic(err)
+						}
+						remoteSourceRepo = clonedRemoteSourceRepo
+					} else {
+						panic(err)
+					}
+				}
 			}
-
+			// Clone template repo to a temporary directory
+			// Takes time from repo creation, to actually be able to clone it
+			time.Sleep(time.Second * 5)
 			cloneRepo(remoteSourceRepo, workDir, githubUsername, githubPassword)
 			sourceRepo = remoteSourceRepo
 		}
@@ -66,6 +90,17 @@ func main() {
 	}
 	// Retrieve templateRepo from currentRepo so we can clone it
 	templateRepo := sourceRepo.GetTemplateRepository()
+	if templateRepo == nil {
+		for templateRepo == nil {
+			fmt.Println("Waiting for repo get its template source updated")
+			sourceRepo, _, err = client.Repositories.Get(ctx, githubOwner, githubRepo)
+			if err != nil {
+				panic(err)
+			}
+			time.Sleep(time.Second * 1)
+			templateRepo = sourceRepo.GetTemplateRepository()
+		}
+	}
 	// Clone template repo to a temporary directory
 	tempTemplateDir := "/tmp/foo/"
 	cloneRepo(templateRepo, tempTemplateDir, githubUsername, githubPassword)
