@@ -7,7 +7,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
@@ -22,7 +22,7 @@ jobs:
         with:
           go-version: '1.17'
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install dependencies
         run: |
           go mod download
@@ -43,7 +43,7 @@ jobs:
           go-version: '1.17'
 
       - name: git checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: install lint
         run: GO111MODULE=off go get golang.org/x/lint/golint
