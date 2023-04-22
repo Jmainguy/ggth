@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/go-git/go-git/v5 v5.6.1
-	github.com/google/go-github/v39 v39.2.0
+	github.com/google/go-github/v52 v52.0.0
 	github.com/google/go-github/v52 v52.0.0
 	golang.org/x/oauth2 v0.7.0
 )
