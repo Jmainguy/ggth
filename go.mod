@@ -2,11 +2,11 @@ module github.com/jmainguy/ggth
 
 go 1.21
 
-toolchain go1.22.3
+toolchain go1.22.4
 
 require (
 	github.com/go-git/go-git/v5 v5.12.0
-	github.com/google/go-github/v62 v62.0.0
+	github.com/google/go-github/v39 v39.2.0
 	github.com/google/go-github/v62 v62.0.0
 	golang.org/x/oauth2 v0.20.0
 )
