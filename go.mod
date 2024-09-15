@@ -2,7 +2,7 @@ module github.com/jmainguy/ggth
 
 go 1.21
 
-toolchain go1.22.4
+toolchain go1.23.1
 
 require (
 	github.com/go-git/go-git/v5 v5.12.0
